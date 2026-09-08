@@ -256,6 +256,14 @@ Return ONLY this JSON (no markdown fences, no other text):
   "aiRecommendation": "<3-4 sentences: describe exactly what you see in the image, specific spoilage indicators, and the safety reasoning. Be precise and medical-grade.>"
 }`;
 
+    const envKey = (import.meta.env["VITE_GEMINI_API_KEY"] as string | undefined)?.trim();
+    const effectiveKey = envKey || customKey?.trim() || apiKey;
+
+    let mimeType = file.type || "image/jpeg";
+    if (mimeType.includes("png")) mimeType = "image/png";
+    else if (mimeType.includes("webp")) mimeType = "image/webp";
+    else mimeType = "image/jpeg";
+
     const candidateModels = [
       "gemini-3.6-flash",
       "gemini-2.5-flash",
@@ -267,7 +275,7 @@ Return ONLY this JSON (no markdown fences, no other text):
     for (const model of candidateModels) {
       try {
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${effectiveKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -276,7 +284,7 @@ Return ONLY this JSON (no markdown fences, no other text):
                 {
                   parts: [
                     { text: prompt },
-                    { inline_data: { mime_type: file.type || "image/jpeg", data: base64 } },
+                    { inline_data: { mime_type: mimeType, data: base64.trim() } },
                   ],
                 },
               ],
@@ -292,7 +300,8 @@ Return ONLY this JSON (no markdown fences, no other text):
           response = res;
           break;
         }
-        console.warn(`Gemini model ${model} responded with ${res.status}, trying next...`);
+        const errDetail = await res.text();
+        console.warn(`Gemini model ${model} responded with ${res.status}:`, errDetail);
       } catch (err) {
         console.warn(`Gemini fetch error on model ${model}:`, err);
       }
@@ -411,6 +420,7 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
       let vividRed = 0;
       let vividOrange = 0;
       let brightWhite = 0;
+      let warmCookedPixels = 0;
 
       // Non-food visual heuristic metrics:
       let grayscalePixels = 0;
@@ -449,33 +459,34 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
         // Spoilage signals — dark decomp zones (but not normal food shadows)
         if (brightness < 40) darkCount++;
 
-        // Mold: muted grey-green tones only (not vivid greens or yellows)
+        // Mold detection:
+        // 1. Classic muted/grey-green mold
         const isMutedGreen =
-          g > r && g > b &&
-          brightness >= 40 && brightness < 150 &&
-          saturation < 0.40 && saturation > 0.05 &&
-          g > 50 && Math.abs(g - r) > 15;
-        const isGreyGreen =
-          g >= r && Math.abs(g - r) < 25 && Math.abs(g - b) < 25 &&
-          saturation < 0.15 && brightness >= 50 && brightness < 130;
-        if (isMutedGreen || isGreyGreen) moldCount++;
+          g > r + 10 &&
+          brightness >= 35 && brightness < 185 &&
+          (Math.abs(g - b) < 55 || g > b);
+
+        // 2. Penicillium blue-green / turquoise / sage mold (common on bread, cheese, citrus)
+        const isPenicilliumMold =
+          g > r + 12 && b > r + 5 &&
+          brightness >= 30 && brightness < 190;
+
+        if (isMutedGreen || isPenicilliumMold) moldCount++;
 
         // TRUE browning / oxidation = dark muddy brownish-olive tones.
-        // Exclude vivid orange-red cooking colours (shrimp, curry, tomato sauce,
-        // baked crust, etc.) which are NORMAL for cooked food.
         const isBrown =
           r > 80 && r > g && r > b &&
-          g > 30 && g < r - 25 &&          // noticeable red dominance
-          b < 70 && b < g - 10 &&          // very low blue (not orange-red)
+          g > 30 && g < r - 25 &&
+          b < 70 && b < g - 10 &&
           saturation > 0.20 && saturation < 0.65 &&
-          brightness < 130;                // dark muddy, not vivid orange
+          brightness < 130;
         if (isBrown) brownCount++;
 
         // Warm cooked-food tones: golden, orange-brown, terracotta, cooked-shrimp pink
-        // These are POSITIVE freshness signals, not spoilage.
         const isCookedTone =
           r > 140 && r > g + 20 && b < 130 &&
           brightness > 80 && saturation > 0.15;
+        if (isCookedTone) warmCookedPixels++;
 
         const isSlime =
           saturation < 0.15 && brightness >= 60 && brightness < 120 &&
@@ -484,9 +495,11 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
 
         if (saturation < 0.10 && brightness >= 50) dullCount++;
 
+        // Vivid green: authentic leafy greens / fresh vegetables
+        // (strict threshold: strong green dominance over both red and blue)
         if (
-          g > r + 35 && g > b + 35 &&
-          saturation > 0.45 && brightness > 90 && brightness < 220
+          g > r + 45 && g > b + 35 &&
+          saturation > 0.40 && brightness > 80 && brightness < 210
         ) vividGreen++;
 
         if (
@@ -494,14 +507,11 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
           saturation > 0.5 && brightness > 80
         ) vividRed++;
 
-        // Vivid orange — shrimp, mango, carrot, paprika, pumpkin etc.
+        // Vivid orange — shrimp, mango, carrot, pumpkin etc.
         if (
           r > 160 && g > 80 && g < r - 20 && b < 100 &&
           saturation > 0.35 && brightness > 90
         ) vividOrange++;
-
-        // Cooked warm tones counter (shrimp pink, golden crust, caramel, sauce)
-        if (isCookedTone) brightWhite++;  // reuse brightWhite slot as "warm vivid" bonus
 
         if (
           brightness > 200 && saturation < 0.10 &&
@@ -562,22 +572,25 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
       const slimeR = slimeCount / total;
       const dullR  = dullCount  / total;
 
-      const vividGreenR  = vividGreen  / total;
+      // Crucial context: is the base food warm/bread/meat (average Red > average Green)?
+      // If an image is mostly bread/pastry/meat, ANY green is MOULD, never vegetables!
+      const isWarmBaseFood = avgR > avgG + 10;
+      let effectiveVividGreenR = vividGreen / total;
+      if (isWarmBaseFood && moldR > 0.02) {
+        // Cancel green produce bonus if the base food is bread/bakery/grain/meat with mold
+        effectiveVividGreenR = 0;
+      }
+
       const vividRedR    = vividRed    / total;
       const vividOrangeR = vividOrange / total;
       const brightWhiteR = brightWhite / total;
+      const warmCookedR  = warmCookedPixels / total;
 
-      // ── Freshness metric calculations ─────────────────────────────────────
-      // moldR: muted grey-green pixels (actual spoilage indicator)
-      // darkR: near-black pixels (decomp zones, very strict threshold)
-      // brownR: dark muddy oxidation (NOT normal cooking colours)
-      // slimeR: flat neutral mid-range (slime / bio-film)
-      // dullR: desaturated flat hue (dehydration)
-
+      // Mold risk: even a small 3-5% patch of mold spores makes food unsafe
       const moldRiskRaw = Math.round(
-        moldR * 220 + darkR * 120 + slimeR * 90
+        moldR * 500 + darkR * 140 + slimeR * 90
       );
-      const moldRisk = Math.min(95, Math.max(0, moldRiskRaw));
+      const moldRisk = Math.min(99, Math.max(0, moldRiskRaw));
 
       // Discoloration only counts TRUE muddy browning, not cooking warmth
       const discolorationRaw = Math.round(
@@ -591,27 +604,37 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
       const moistureLoss = Math.min(95, Math.max(0, moistureLossRaw));
 
       const textureDegRaw = Math.round(
-        darkR * 100 + brownR * 60 + moldR * 90 + slimeR * 60
+        darkR * 100 + brownR * 60 + moldR * 120 + slimeR * 60
       );
       const textureDegradation = Math.min(95, Math.max(0, textureDegRaw));
 
-      // Warm cooked-food coverage (golden, orange, shrimp, curry, sauce etc.)
-      // Acts as a freshness bonus — cooked food with rich warm tones is not spoiled.
-      const cookedFoodBonus = Math.min(30, Math.round(vividOrangeR * 60 + vividRedR * 40));
+      // Cooked food bonus (only if NO visible mold contamination!)
+      const cookedFoodBonus = moldRisk > 25
+        ? 0
+        : Math.min(25, Math.round(warmCookedR * 40 + vividOrangeR * 30));
 
-      const freshnessRaw = Math.round(
-        62                             // higher base — food is assumed fresh unless proven otherwise
-        - moldRisk    * 0.50           // mold is still critical
-        - discoloration * 0.10         // reduced — cooking browns are not spoilage
+      let freshnessRaw = Math.round(
+        62
+        - moldRisk    * 0.70           // heavy penalty for mold
+        - discoloration * 0.10
         - moistureLoss  * 0.06
         - textureDegradation * 0.05
-        + vividGreenR  * 55            // vivid green produce
-        + vividRedR    * 40            // tomato, apple, red pepper
-        + vividOrangeR * 35            // shrimp, carrot, mango, pumpkin
-        + brightWhiteR * 8             // bright & clean (warm tones counted here too)
-        + cookedFoodBonus              // bonus for rich warm cooked colours
-        + (avgBrightness / 255) * 8
+        + effectiveVividGreenR * 50
+        + vividRedR    * 35
+        + vividOrangeR * 25
+        + brightWhiteR * 6
+        + cookedFoodBonus
+        + (avgBrightness / 255) * 6
       );
+
+      // SAFETY ENFORCEMENT: Mold is a biological hazard.
+      // If mold risk is > 30%, food CANNOT be rated fresh.
+      if (moldRisk > 50 || moldR > 0.08) {
+        freshnessRaw = Math.min(freshnessRaw, 12);
+      } else if (moldRisk > 30 || moldR > 0.04) {
+        freshnessRaw = Math.min(freshnessRaw, 35);
+      }
+
       const freshnessScore = Math.min(95, Math.max(5, freshnessRaw));
 
       let grade: ScanResult["grade"];
@@ -621,13 +644,21 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
       let primaryDefectType: DefectBox["type"];
       let primaryDefectLabel: string;
 
-      if (freshnessScore >= 75) {
+      // Prioritize mold hazard in grading
+      if (moldRisk > 35 || moldR > 0.05) {
+        grade = "Grade D (Spoiled / Unsafe)";
+        shelfLifeRemaining = "0 Hours (Expired)";
+        suggestedAction = "Composting / Animal Feed";
+        primaryDefectType = "mold";
+        primaryDefectLabel = `Active Mould Infestation: ${(moldR * 100).toFixed(1)}% coverage (Risk ${moldRisk}%)`;
+        aiRecommendation = `CRITICAL BIOLOGICAL HAZARD: Canvas analysis detected widespread mold / fungal mycelium sporulation (${(moldR * 100).toFixed(1)}% pixel coverage, mold risk ${moldRisk}%). Food is spoiled and hazardous for human consumption. Immediately discard or route to composting/biogas. DO NOT DONATE.`;
+      } else if (freshnessScore >= 75) {
         grade = "Grade A (Optimal)";
-        shelfLifeRemaining = `${Math.floor(4 + vividGreenR * 10 + (avgBrightness / 255) * 3)} - ${Math.floor(7 + vividGreenR * 12)} Days`;
+        shelfLifeRemaining = `${Math.floor(4 + effectiveVividGreenR * 10 + (avgBrightness / 255) * 3)} - ${Math.floor(7 + effectiveVividGreenR * 12)} Days`;
         suggestedAction = "Immediate Kitchen Use";
         primaryDefectType = "fresh";
         primaryDefectLabel = "Vivid Colour Uniformity — No Visual Defects Detected";
-        aiRecommendation = `Canvas pixel analysis detected strong colour vibrancy (avg RGB: ${avgR.toFixed(0)}/${avgG.toFixed(0)}/${avgB.toFixed(0)}). Mold risk index ${moldRisk}%, discoloration ${discoloration}% — both within safe thresholds. NOTE: This is a conservative canvas-based estimate. For verified food-safety decisions, configure VITE_GEMINI_API_KEY for AI-powered analysis.`;
+        aiRecommendation = `Canvas pixel analysis detected strong colour vibrancy (avg RGB: ${avgR.toFixed(0)}/${avgG.toFixed(0)}/${avgB.toFixed(0)}). Mold risk index ${moldRisk}%, discoloration ${discoloration}% — safe thresholds.`;
       } else if (freshnessScore >= 55) {
         grade = "Grade B (Safe - Urgent)";
         const hrs = Math.floor(10 + (freshnessScore - 55) * 1.5);
@@ -637,23 +668,21 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
         primaryDefectLabel = brownR > 0.12
           ? `Oxidative Browning Detected (${(brownR * 100).toFixed(1)}% pixel coverage)`
           : `Colour Shift & Texture Softening`;
-        aiRecommendation = `Canvas analysis shows elevated browning (${discoloration}%, brown pixels: ${(brownR * 100).toFixed(1)}%) and moisture-loss indicators (${moistureLoss}%). Mold risk ${moldRisk}% — within acceptable range. Safe for urgent redistribution but do not hold. CAUTION: Configure VITE_GEMINI_API_KEY for verified AI food-safety analysis.`;
+        aiRecommendation = `Canvas analysis shows elevated browning (${discoloration}%) and moisture loss (${moistureLoss}%). Mold risk ${moldRisk}% — safe for urgent redistribution.`;
       } else if (freshnessScore >= 30) {
         grade = "Grade C (Sub-Standard)";
         shelfLifeRemaining = "1 - 4 Hours";
         suggestedAction = "Secondary Discount Sale";
-        primaryDefectType = moldR > 0.05 ? "mold" : "bruise";
-        primaryDefectLabel = moldR > 0.05
-          ? `Possible Mould Signatures Detected (${(moldR * 100).toFixed(1)}% muted-green pixels) — DO NOT donate to children`
-          : `Significant Discoloration & Degradation`;
-        aiRecommendation = `WARNING: Canvas analysis detected significant spoilage indicators — mold risk ${moldRisk}%, discoloration ${discoloration}%, dark decomposition zones ${(darkR * 100).toFixed(1)}%. DO NOT serve to vulnerable populations or children. Suitable only for processed / industrial use within 1–4 hours. STRONGLY RECOMMENDED: Set VITE_GEMINI_API_KEY and re-scan for a verified verdict.`;
+        primaryDefectType = moldR > 0.03 ? "mold" : "bruise";
+        primaryDefectLabel = `Significant Discoloration & Degradation (Mold Risk ${moldRisk}%)`;
+        aiRecommendation = `WARNING: Canvas analysis detected degradation signs (mold risk ${moldRisk}%, discoloration ${discoloration}%). Suitable only for processed use within 1–4 hours.`;
       } else {
         grade = "Grade D (Spoiled / Unsafe)";
         shelfLifeRemaining = "0 Hours (Expired)";
         suggestedAction = "Composting / Animal Feed";
         primaryDefectType = "mold";
         primaryDefectLabel = `Severe Spoilage: Mould ${moldRisk}% / Decomp ${(darkR * 100).toFixed(1)}%`;
-        aiRecommendation = `CRITICAL — DO NOT CONSUME. Canvas analysis detected severe spoilage: mold risk ${moldRisk}%, dark decomposition zone density ${(darkR * 100).toFixed(1)}%, discoloration ${discoloration}%. This food is unsafe for human consumption. Divert immediately to composting or biogas. DO NOT donate to NGOs or food banks.`;
+        aiRecommendation = `CRITICAL — DO NOT CONSUME. Canvas analysis detected severe spoilage: mold risk ${moldRisk}%, discoloration ${discoloration}%. Unsafe for human consumption. Divert to composting or animal feed.`;
       }
 
       const defects: DefectBox[] = [
