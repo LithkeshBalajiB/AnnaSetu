@@ -256,31 +256,50 @@ Return ONLY this JSON (no markdown fences, no other text):
   "aiRecommendation": "<3-4 sentences: describe exactly what you see in the image, specific spoilage indicators, and the safety reasoning. Be precise and medical-grade.>"
 }`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: file.type || "image/jpeg", data: base64 } },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.05,
-            topP: 0.8,
-            maxOutputTokens: 1024,
-          },
-        }),
-      }
-    );
+    const candidateModels = [
+      "gemini-3.6-flash",
+      "gemini-2.5-flash",
+      "gemini-flash-latest",
+      "gemini-1.5-flash",
+    ];
 
-    if (!response.ok) {
-      console.error("Gemini API error:", response.status, await response.text());
+    let response: Response | null = null;
+    for (const model of candidateModels) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: file.type || "image/jpeg", data: base64 } },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.05,
+                topP: 0.8,
+                maxOutputTokens: 1024,
+              },
+            }),
+          }
+        );
+        if (res.ok) {
+          response = res;
+          break;
+        }
+        console.warn(`Gemini model ${model} responded with ${res.status}, trying next...`);
+      } catch (err) {
+        console.warn(`Gemini fetch error on model ${model}:`, err);
+      }
+    }
+
+    if (!response || !response.ok) {
+      console.error("All Gemini vision models failed or returned errors");
       return null;
     }
 
@@ -980,7 +999,7 @@ function QualityScannerPage() {
                     {hasGeminiKey ? "RUNNING GEMINI AI VISION ANALYSIS..." : "RUNNING CONSERVATIVE PIXEL ANALYSIS..."}
                   </p>
                   <p className="font-mono text-[10px] text-slate-400">
-                    {hasGeminiKey ? "Analyzing food safety with Gemini 1.5 Flash..." : "Using safety-biased canvas engine..."}
+                    {hasGeminiKey ? "Analyzing food safety with Gemini Vision AI..." : "Using safety-biased canvas engine..."}
                   </p>
                 </div>
               ) : (
@@ -1028,7 +1047,7 @@ function QualityScannerPage() {
                 </span>
               </div>
               <span className={`font-mono text-[10px] ${activeScan.engine === "gemini" ? "text-emerald-400" : "text-amber-400"}`}>
-                {activeScan.engine === "gemini" ? "⚡ Gemini 1.5 Flash Vision" : "⚠ Canvas Fallback (Conservative)"}
+                {activeScan.engine === "gemini" ? "⚡ Gemini Vision AI" : "⚠ Canvas Fallback (Conservative)"}
               </span>
             </div>
           </div>
