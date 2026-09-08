@@ -218,16 +218,13 @@ async function analyzeWithGemini(
     const prompt = `You are a certified food safety inspector and culinary AI embedded in AnnaSetu, an AI food surplus & redistribution system.
 
 CRITICAL FIRST TASK — FOOD VERIFICATION:
-Inspect the image carefully to determine whether it depicts genuine EDIBLE FOOD, fresh agricultural produce (fruits, vegetables, herbs), grains, cooked dishes/meals, bread/bakery, dairy, meat/fish, beverages, culinary raw ingredients, or food packaging.
+Inspect the image carefully to determine whether it depicts genuine EDIBLE FOOD, fresh agricultural produce (fruits, vegetables, herbs), grains, cooked dishes/meals, bread/bakery, dairy, meat/fish, beverages, or culinary raw ingredients.
 
-IMPORTANT FOR CAPTURED PHOTOS & SCREENSHOTS:
-If the image is a camera capture, screen capture, phone screenshot, or cropped photo that CONTAINS food or meals, it MUST be classified as food (isFood: true). Do NOT reject food just because it was captured on a screen or taken with a mobile camera.
-
-Only if the image COMPLETELY LACKS FOOD (for example: human portraits/selfies with no food, pets/animals with no food, vehicles, paper documents/receipts with no food, computer hardware/desks with no food):
+If the image is NOT food (for example: human beings, faces, selfies, pets, animals, vehicles, cars, electronics, smartphones, laptops, computers, paper documents, receipts, invoices, screenshots, clothing, shoes, furniture, office desks, buildings, tools, toys, or any non-edible object):
 You MUST immediately halt food inspection and return ONLY this JSON (no markdown fences, no other text):
 {
   "isFood": false,
-  "detectedObject": "<short 2-4 word description of what is actually shown in the image, e.g. 'Human portrait', 'Smartphone', 'Paper receipt / document', 'Pet animal'>",
+  "detectedObject": "<short 2-4 word description of what is actually shown in the image, e.g. 'Laptop computer on desk', 'Human portrait', 'Smartphone', 'Paper receipt / document', 'Pet animal'>",
   "reason": "The uploaded image does not depict edible food, fresh produce, or prepared meals. AI freshness scoring and safety routing cannot be performed on non-food items."
 }
 
@@ -350,6 +347,29 @@ Return ONLY this JSON (no markdown fences, no other text):
 // ─────────────────────────────────────────────────────────────────────────────
 function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
   return new Promise((resolve) => {
+    // 1. Filename heuristic — only reject files with strongly non-food names.
+    //    We intentionally OMIT 'screenshot / screen / capture' here because
+    //    users may photograph food and the OS/camera can name files generically.
+    //    Gemini (when key is present) handles semantic food detection accurately.
+    const lowerName = file.name.toLowerCase();
+    const nonFoodKeywords: { pattern: RegExp; label: string }[] = [
+      { pattern: /(\blaptop\b|\bmacbook\b|\bnotebook_pc\b)/i, label: "Laptop / Computer" },
+      { pattern: /(\bcar\b|\bvehicle\b|\btruck\b|\bmotorcycle\b)/i, label: "Vehicle / Transportation" },
+      { pattern: /(\binvoice\b|\breceipt\b|\bcontract\b|\bresume\b|\bcv\b)/i, label: "Paper Document / Invoice" },
+      { pattern: /(\bselfie\b|\bportrait\b|\bavatar\b)/i, label: "Human Portrait / Selfie" },
+    ];
+
+    for (const item of nonFoodKeywords) {
+      if (item.pattern.test(lowerName)) {
+        return resolve({
+          isFood: false,
+          detectedObject: item.label,
+          reason: `The uploaded file appears to be a ${item.label.toLowerCase()} rather than food or agricultural produce. AnnaSetu AI Vision Scanner only inspects food for safety and redistribution.`,
+          imageUrl,
+        });
+      }
+    }
+
     const img = new Image();
     img.onload = () => {
       const SIZE = 250;
@@ -454,13 +474,44 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
         ) brightWhite++;
       }
 
-      // Only reject if image is virtually a blank canvas with zero content (>98% pure white)
+      // Check non-food pixel signatures:
+      const grayscaleRatio = grayscalePixels / total;
       const pureWhiteRatio = pureWhitePixels / total;
-      if (pureWhiteRatio > 0.98) {
+      const coolBlueRatio = coolBluePixels / total;
+      const foodToneRatio = organicFoodTones / total;
+
+      // ── Non-food pixel checks (CONSERVATIVE — avoid false positives) ────────
+      // Food photos taken indoors, on white plates, with flash, or against light
+      // backgrounds can have very high white/grayscale ratios. We ONLY reject images
+      // that are *extremely* obviously not a photograph of food.
+
+      // Near-pure-white document (e.g. scanned PDF, blank page): > 93% white pixels
+      if (pureWhiteRatio > 0.93) {
         return resolve({
           isFood: false,
-          detectedObject: "Blank Canvas or Empty Document",
-          reason: "The uploaded image appears to be an empty or blank canvas. Please upload a clear photo of food or produce.",
+          detectedObject: "Blank / Near-White Document",
+          reason: "The uploaded image appears to be a blank or near-white document page. Please upload a photo of actual food or produce.",
+          imageUrl,
+        });
+      }
+
+      // Solid-blue electronic screen (e.g. BSOD, TV, monitor): dominant cool-blue,
+      // very high ratio AND essentially zero warm food-tone pixels.
+      if (coolBlueRatio > 0.60 && foodToneRatio < 0.02) {
+        return resolve({
+          isFood: false,
+          detectedObject: "Electronic Screen / Display",
+          reason: "Pixel analysis detected an overwhelmingly blue electronic display spectrum with no food colour signatures.",
+          imageUrl,
+        });
+      }
+
+      // Near-total grayscale image (e.g. black-and-white technical diagram): > 97%
+      if (grayscaleRatio > 0.97 && foodToneRatio < 0.01) {
+        return resolve({
+          isFood: false,
+          detectedObject: "Monochrome / Grayscale Graphic",
+          reason: "The image is almost entirely monochrome and contains no natural food colour signatures.",
           imageUrl,
         });
       }
