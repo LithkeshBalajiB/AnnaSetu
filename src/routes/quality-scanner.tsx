@@ -218,13 +218,16 @@ async function analyzeWithGemini(
     const prompt = `You are a certified food safety inspector and culinary AI embedded in AnnaSetu, an AI food surplus & redistribution system.
 
 CRITICAL FIRST TASK — FOOD VERIFICATION:
-Inspect the image carefully to determine whether it depicts genuine EDIBLE FOOD, fresh agricultural produce (fruits, vegetables, herbs), grains, cooked dishes/meals, bread/bakery, dairy, meat/fish, beverages, or culinary raw ingredients.
+Inspect the image carefully to determine whether it depicts genuine EDIBLE FOOD, fresh agricultural produce (fruits, vegetables, herbs), grains, cooked dishes/meals, bread/bakery, dairy, meat/fish, beverages, culinary raw ingredients, or food packaging.
 
-If the image is NOT food (for example: human beings, faces, selfies, pets, animals, vehicles, cars, electronics, smartphones, laptops, computers, paper documents, receipts, invoices, screenshots, clothing, shoes, furniture, office desks, buildings, tools, toys, or any non-edible object):
+IMPORTANT FOR CAPTURED PHOTOS & SCREENSHOTS:
+If the image is a camera capture, screen capture, phone screenshot, or cropped photo that CONTAINS food or meals, it MUST be classified as food (isFood: true). Do NOT reject food just because it was captured on a screen or taken with a mobile camera.
+
+Only if the image COMPLETELY LACKS FOOD (for example: human portraits/selfies with no food, pets/animals with no food, vehicles, paper documents/receipts with no food, computer hardware/desks with no food):
 You MUST immediately halt food inspection and return ONLY this JSON (no markdown fences, no other text):
 {
   "isFood": false,
-  "detectedObject": "<short 2-4 word description of what is actually shown in the image, e.g. 'Laptop computer on desk', 'Human portrait', 'Smartphone', 'Paper receipt / document', 'Pet animal'>",
+  "detectedObject": "<short 2-4 word description of what is actually shown in the image, e.g. 'Human portrait', 'Smartphone', 'Paper receipt / document', 'Pet animal'>",
   "reason": "The uploaded image does not depict edible food, fresh produce, or prepared meals. AI freshness scoring and safety routing cannot be performed on non-food items."
 }
 
@@ -347,32 +350,6 @@ Return ONLY this JSON (no markdown fences, no other text):
 // ─────────────────────────────────────────────────────────────────────────────
 function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
   return new Promise((resolve) => {
-    // 1. Filename heuristic check for common non-food uploads
-    const lowerName = file.name.toLowerCase();
-    const nonFoodKeywords: { pattern: RegExp; label: string }[] = [
-      { pattern: /(laptop|macbook|computer|pc|notebook)/i, label: "Laptop / Computer" },
-      { pattern: /(phone|iphone|android|smartphone|mobile|ipad|tablet)/i, label: "Smartphone / Mobile Device" },
-      { pattern: /(car|vehicle|automobile|truck|motorcycle|bike|bicycle)/i, label: "Vehicle / Transportation" },
-      { pattern: /(document|doc|pdf|receipt|invoice|bill|statement|contract|resume)/i, label: "Paper Document / Invoice" },
-      { pattern: /(screenshot|screen|capture|desktop|display)/i, label: "Screen Capture / UI Graphic" },
-      { pattern: /(person|face|selfie|portrait|profile|man|woman|avatar)/i, label: "Human Subject / Portrait" },
-      { pattern: /(dog|cat|pet|puppy|kitten|bird|animal)/i, label: "Animal / Pet" },
-      { pattern: /(shoe|sneaker|shirt|pants|jacket|clothes|dress)/i, label: "Apparel / Clothing" },
-      { pattern: /(keyboard|mouse|monitor|hardware|gadget)/i, label: "Computer Hardware" },
-      { pattern: /(desk|chair|table|sofa|furniture)/i, label: "Furniture / Interior" },
-    ];
-
-    for (const item of nonFoodKeywords) {
-      if (item.pattern.test(lowerName)) {
-        return resolve({
-          isFood: false,
-          detectedObject: item.label,
-          reason: `The uploaded file appears to be a ${item.label.toLowerCase()} rather than food or agricultural produce. AnnaSetu AI Vision Scanner only inspects food for safety and redistribution.`,
-          imageUrl,
-        });
-      }
-    }
-
     const img = new Image();
     img.onload = () => {
       const SIZE = 250;
@@ -477,38 +454,13 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
         ) brightWhite++;
       }
 
-      // Check non-food pixel signatures:
-      const grayscaleRatio = grayscalePixels / total;
+      // Only reject if image is virtually a blank canvas with zero content (>98% pure white)
       const pureWhiteRatio = pureWhitePixels / total;
-      const coolBlueRatio = coolBluePixels / total;
-      const foodToneRatio = organicFoodTones / total;
-
-      // Document / Screenshot / Blank background detection
-      if ((grayscaleRatio > 0.82 && pureWhiteRatio > 0.35) || pureWhiteRatio > 0.65) {
+      if (pureWhiteRatio > 0.98) {
         return resolve({
           isFood: false,
-          detectedObject: "Document or Text Page",
-          reason: "The uploaded image is predominantly a white document or grayscale text page. Please upload a photo of food or produce.",
-          imageUrl,
-        });
-      }
-
-      // Electronics / Metallic screen detection
-      if (coolBlueRatio > 0.35 && foodToneRatio < 0.05) {
-        return resolve({
-          isFood: false,
-          detectedObject: "Electronics or Screen Display",
-          reason: "Pixel analysis detected synthetic cold-blue and digital display spectrums with zero food signatures.",
-          imageUrl,
-        });
-      }
-
-      // Grayscale / wireframe graphic
-      if (grayscaleRatio > 0.88 && foodToneRatio < 0.03) {
-        return resolve({
-          isFood: false,
-          detectedObject: "Grayscale / Monochrome Graphic",
-          reason: "The image contains only monochrome pixels and lacks natural food color signatures.",
+          detectedObject: "Blank Canvas or Empty Document",
+          reason: "The uploaded image appears to be an empty or blank canvas. Please upload a clear photo of food or produce.",
           imageUrl,
         });
       }
