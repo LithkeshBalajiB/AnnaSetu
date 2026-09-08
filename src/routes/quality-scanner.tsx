@@ -427,31 +427,43 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
           organicFoodTones++;
         }
 
-        // Spoilage signals
-        if (brightness < 55) darkCount++;
+        // Spoilage signals — dark decomp zones (but not normal food shadows)
+        if (brightness < 40) darkCount++;
+
+        // Mold: muted grey-green tones only (not vivid greens or yellows)
         const isMutedGreen =
           g > r && g > b &&
-          brightness >= 40 && brightness < 160 &&
-          saturation < 0.55 &&
-          g > 50;
+          brightness >= 40 && brightness < 150 &&
+          saturation < 0.40 && saturation > 0.05 &&
+          g > 50 && Math.abs(g - r) > 15;
         const isGreyGreen =
-          g >= r && Math.abs(g - r) < 30 && Math.abs(g - b) < 30 &&
-          saturation < 0.20 && brightness >= 50 && brightness < 140;
+          g >= r && Math.abs(g - r) < 25 && Math.abs(g - b) < 25 &&
+          saturation < 0.15 && brightness >= 50 && brightness < 130;
         if (isMutedGreen || isGreyGreen) moldCount++;
 
+        // TRUE browning / oxidation = dark muddy brownish-olive tones.
+        // Exclude vivid orange-red cooking colours (shrimp, curry, tomato sauce,
+        // baked crust, etc.) which are NORMAL for cooked food.
         const isBrown =
-          r > 100 && r > g && r > b &&
-          g > 40 && g < r - 15 &&
-          b < 90 && b < g &&
-          saturation > 0.15 && saturation < 0.75;
+          r > 80 && r > g && r > b &&
+          g > 30 && g < r - 25 &&          // noticeable red dominance
+          b < 70 && b < g - 10 &&          // very low blue (not orange-red)
+          saturation > 0.20 && saturation < 0.65 &&
+          brightness < 130;                // dark muddy, not vivid orange
         if (isBrown) brownCount++;
 
+        // Warm cooked-food tones: golden, orange-brown, terracotta, cooked-shrimp pink
+        // These are POSITIVE freshness signals, not spoilage.
+        const isCookedTone =
+          r > 140 && r > g + 20 && b < 130 &&
+          brightness > 80 && saturation > 0.15;
+
         const isSlime =
-          saturation < 0.18 && brightness >= 60 && brightness < 130 &&
-          g >= r - 10 && g >= b - 10;
+          saturation < 0.15 && brightness >= 60 && brightness < 120 &&
+          g >= r - 8 && g >= b - 8;
         if (isSlime) slimeCount++;
 
-        if (saturation < 0.12 && brightness >= 50) dullCount++;
+        if (saturation < 0.10 && brightness >= 50) dullCount++;
 
         if (
           g > r + 35 && g > b + 35 &&
@@ -463,10 +475,14 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
           saturation > 0.5 && brightness > 80
         ) vividRed++;
 
+        // Vivid orange — shrimp, mango, carrot, paprika, pumpkin etc.
         if (
-          r > 180 && g > 100 && g < r - 30 && b < 80 &&
-          saturation > 0.45
+          r > 160 && g > 80 && g < r - 20 && b < 100 &&
+          saturation > 0.35 && brightness > 90
         ) vividOrange++;
+
+        // Cooked warm tones counter (shrimp pink, golden crust, caramel, sauce)
+        if (isCookedTone) brightWhite++;  // reuse brightWhite slot as "warm vivid" bonus
 
         if (
           brightness > 200 && saturation < 0.10 &&
@@ -532,37 +548,50 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
       const vividOrangeR = vividOrange / total;
       const brightWhiteR = brightWhite / total;
 
+      // ── Freshness metric calculations ─────────────────────────────────────
+      // moldR: muted grey-green pixels (actual spoilage indicator)
+      // darkR: near-black pixels (decomp zones, very strict threshold)
+      // brownR: dark muddy oxidation (NOT normal cooking colours)
+      // slimeR: flat neutral mid-range (slime / bio-film)
+      // dullR: desaturated flat hue (dehydration)
+
       const moldRiskRaw = Math.round(
-        moldR * 280 + darkR * 180 + slimeR * 120
+        moldR * 220 + darkR * 120 + slimeR * 90
       );
       const moldRisk = Math.min(95, Math.max(0, moldRiskRaw));
 
+      // Discoloration only counts TRUE muddy browning, not cooking warmth
       const discolorationRaw = Math.round(
-        brownR * 220 + dullR * 100 + darkR * 80
+        brownR * 130 + dullR * 60 + darkR * 50
       );
       const discoloration = Math.min(95, Math.max(0, discolorationRaw));
 
       const moistureLossRaw = Math.round(
-        dullR * 200 + (1 - avgBrightness / 255) * 60 + brownR * 40
+        dullR * 150 + (1 - avgBrightness / 255) * 30 + brownR * 20
       );
       const moistureLoss = Math.min(95, Math.max(0, moistureLossRaw));
 
       const textureDegRaw = Math.round(
-        darkR * 160 + brownR * 100 + moldR * 120 + slimeR * 80
+        darkR * 100 + brownR * 60 + moldR * 90 + slimeR * 60
       );
       const textureDegradation = Math.min(95, Math.max(0, textureDegRaw));
 
+      // Warm cooked-food coverage (golden, orange, shrimp, curry, sauce etc.)
+      // Acts as a freshness bonus — cooked food with rich warm tones is not spoiled.
+      const cookedFoodBonus = Math.min(30, Math.round(vividOrangeR * 60 + vividRedR * 40));
+
       const freshnessRaw = Math.round(
-        40
-        - moldRisk    * 0.50
-        - discoloration * 0.25
-        - moistureLoss  * 0.10
-        - textureDegradation * 0.08
-        + vividGreenR  * 50
-        + vividRedR    * 35
-        + vividOrangeR * 25
-        + brightWhiteR * 15
-        + (avgBrightness / 255) * 10
+        62                             // higher base — food is assumed fresh unless proven otherwise
+        - moldRisk    * 0.50           // mold is still critical
+        - discoloration * 0.10         // reduced — cooking browns are not spoilage
+        - moistureLoss  * 0.06
+        - textureDegradation * 0.05
+        + vividGreenR  * 55            // vivid green produce
+        + vividRedR    * 40            // tomato, apple, red pepper
+        + vividOrangeR * 35            // shrimp, carrot, mango, pumpkin
+        + brightWhiteR * 8             // bright & clean (warm tones counted here too)
+        + cookedFoodBonus              // bonus for rich warm cooked colours
+        + (avgBrightness / 255) * 8
       );
       const freshnessScore = Math.min(95, Math.max(5, freshnessRaw));
 
@@ -626,7 +655,9 @@ function analyzeWithCanvas(imageUrl: string, file: File): Promise<ScanOutcome> {
           box: { top: 52, left: 55, width: 28, height: 28 },
         });
       }
-      if (discoloration > 35) {
+      // Only surface a browning defect box when discoloration is genuinely high
+      // (not just warm cooking colours that the adjusted formula now rates much lower)
+      if (discoloration > 55) {
         defects.push({
           id: `d-${Date.now()}-3`,
           label: `Browning / Oxidation Layer: ${discoloration}% index`,
