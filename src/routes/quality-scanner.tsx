@@ -785,6 +785,26 @@ function QualityScannerPage() {
     setTimeout(() => {
       setActiveScan(preset);
       setIsScanning(false);
+      try {
+        const storedHistory = JSON.parse(localStorage.getItem("annasetu_scan_history") || "[]");
+        if (!storedHistory.some((s: { id: string }) => s.id === preset.id)) {
+          const entry = {
+            id: preset.id,
+            title: preset.title,
+            category: preset.category,
+            imageUrl: preset.imageUrl,
+            freshnessScore: preset.freshnessScore,
+            grade: preset.grade,
+            shelfLifeRemaining: preset.shelfLifeRemaining,
+            suggestedAction: preset.suggestedAction,
+            estimatedSurplusKg: preset.estimatedSurplusKg,
+            engine: preset.engine,
+            scannedAt: Date.now(),
+            aiRecommendation: preset.aiRecommendation,
+          };
+          localStorage.setItem("annasetu_scan_history", JSON.stringify([entry, ...storedHistory]));
+        }
+      } catch {}
       toast.success(`AI Vision scanned: ${preset.title}`);
     }, 600);
   };
@@ -833,6 +853,24 @@ function QualityScannerPage() {
       const result = outcome.scanResult;
       setActiveScan(result);
       setHistory((prev) => [result, ...prev]);
+      try {
+        const storedHistory = JSON.parse(localStorage.getItem("annasetu_scan_history") || "[]");
+        const entry = {
+          id: result.id,
+          title: result.title,
+          category: result.category,
+          imageUrl: result.imageUrl,
+          freshnessScore: result.freshnessScore,
+          grade: result.grade,
+          shelfLifeRemaining: result.shelfLifeRemaining,
+          suggestedAction: result.suggestedAction,
+          estimatedSurplusKg: result.estimatedSurplusKg,
+          engine: result.engine,
+          scannedAt: Date.now(),
+          aiRecommendation: result.aiRecommendation,
+        };
+        localStorage.setItem("annasetu_scan_history", JSON.stringify([entry, ...storedHistory]));
+      } catch {}
       setIsScanning(false);
 
       if (result.engine === "gemini") {

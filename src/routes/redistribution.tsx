@@ -25,6 +25,7 @@ import {
   BatchStatus,
 } from "@/lib/traceability-data";
 import { TraceabilityModal } from "@/components/traceability-modal";
+import { LiveRouteMap } from "@/components/live-route-map";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/redistribution")({
@@ -182,49 +183,9 @@ function Redistribution() {
         <Card
           className="xl:col-span-2"
           title="Live Logistics & Drop Points"
-          description="Real-time multi-stop pickup and delivery network"
+          description="Real-time multi-stop GPS routing powered by Leaflet & OpenStreetMap"
         >
-          <div className="relative h-72 w-full overflow-hidden rounded-lg border border-border bg-accent/40">
-            <div
-              className="absolute inset-0 opacity-40"
-              style={{
-                backgroundImage:
-                  "linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)",
-                backgroundSize: "40px 40px",
-              }}
-            />
-            <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <polyline
-                points={`50,50 ${data.dropPoints.map((d) => `${d.x},${d.y}`).join(" ")}`}
-                fill="none"
-                stroke="var(--primary)"
-                strokeWidth="0.6"
-                strokeDasharray="2 1.5"
-              />
-            </svg>
-            <div
-              className="absolute -translate-x-1/2 -translate-y-1/2"
-              style={{ left: "50%", top: "50%" }}
-            >
-              <div className="flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-md">
-                <Warehouse className="size-3.5" /> Kitchen Dispatch Hub
-              </div>
-            </div>
-            {data.dropPoints.map((d) => (
-              <div
-                key={d.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
-                style={{ left: `${d.x}%`, top: `${d.y}%` }}
-              >
-                <div className="mx-auto flex size-7 items-center justify-center rounded-full bg-card text-emerald-600 shadow ring-1 ring-border">
-                  <MapPin className="size-4" />
-                </div>
-                <p className="mt-1 max-w-28 text-[10px] font-semibold leading-tight text-foreground/90">
-                  {d.name}
-                </p>
-              </div>
-            ))}
-          </div>
+          <LiveRouteMap />
         </Card>
 
         <Card title="Route Optimization & Fleet" description="Calibrated for thermal stability & fastest ETA">

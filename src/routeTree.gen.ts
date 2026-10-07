@@ -13,9 +13,15 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AlertHistoryRouteImport } from './routes/alert-history'
 import { Route as AlertSettingsRouteImport } from './routes/alert-settings'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ImpactWallRouteImport } from './routes/impact-wall'
+import { Route as IotSensorsRouteImport } from './routes/iot-sensors'
+import { Route as MenuOptimizerRouteImport } from './routes/menu-optimizer'
+import { Route as NgoRegistryRouteImport } from './routes/ngo-registry'
+import { Route as PickupCalendarRouteImport } from './routes/pickup-calendar'
 import { Route as QualityAlertsRouteImport } from './routes/quality-alerts'
 import { Route as QualityScannerRouteImport } from './routes/quality-scanner'
 import { Route as RedistributionRouteImport } from './routes/redistribution'
+import { Route as ScanHistoryRouteImport } from './routes/scan-history'
 import { Route as SurplusForecastRouteImport } from './routes/surplus-forecast'
 import { Route as SustainabilityRouteImport } from './routes/sustainability'
 
@@ -39,6 +45,31 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImpactWallRoute = ImpactWallRouteImport.update({
+  id: '/impact-wall',
+  path: '/impact-wall',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IotSensorsRoute = IotSensorsRouteImport.update({
+  id: '/iot-sensors',
+  path: '/iot-sensors',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MenuOptimizerRoute = MenuOptimizerRouteImport.update({
+  id: '/menu-optimizer',
+  path: '/menu-optimizer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NgoRegistryRoute = NgoRegistryRouteImport.update({
+  id: '/ngo-registry',
+  path: '/ngo-registry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PickupCalendarRoute = PickupCalendarRouteImport.update({
+  id: '/pickup-calendar',
+  path: '/pickup-calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QualityAlertsRoute = QualityAlertsRouteImport.update({
   id: '/quality-alerts',
   path: '/quality-alerts',
@@ -52,6 +83,11 @@ const QualityScannerRoute = QualityScannerRouteImport.update({
 const RedistributionRoute = RedistributionRouteImport.update({
   id: '/redistribution',
   path: '/redistribution',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScanHistoryRoute = ScanHistoryRouteImport.update({
+  id: '/scan-history',
+  path: '/scan-history',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SurplusForecastRoute = SurplusForecastRouteImport.update({
@@ -70,9 +106,15 @@ export interface FileRoutesByFullPath {
   '/alert-history': typeof AlertHistoryRoute
   '/alert-settings': typeof AlertSettingsRoute
   '/dashboard': typeof DashboardRoute
+  '/impact-wall': typeof ImpactWallRoute
+  '/iot-sensors': typeof IotSensorsRoute
+  '/menu-optimizer': typeof MenuOptimizerRoute
+  '/ngo-registry': typeof NgoRegistryRoute
+  '/pickup-calendar': typeof PickupCalendarRoute
   '/quality-alerts': typeof QualityAlertsRoute
   '/quality-scanner': typeof QualityScannerRoute
   '/redistribution': typeof RedistributionRoute
+  '/scan-history': typeof ScanHistoryRoute
   '/surplus-forecast': typeof SurplusForecastRoute
   '/sustainability': typeof SustainabilityRoute
 }
@@ -81,9 +123,15 @@ export interface FileRoutesByTo {
   '/alert-history': typeof AlertHistoryRoute
   '/alert-settings': typeof AlertSettingsRoute
   '/dashboard': typeof DashboardRoute
+  '/impact-wall': typeof ImpactWallRoute
+  '/iot-sensors': typeof IotSensorsRoute
+  '/menu-optimizer': typeof MenuOptimizerRoute
+  '/ngo-registry': typeof NgoRegistryRoute
+  '/pickup-calendar': typeof PickupCalendarRoute
   '/quality-alerts': typeof QualityAlertsRoute
   '/quality-scanner': typeof QualityScannerRoute
   '/redistribution': typeof RedistributionRoute
+  '/scan-history': typeof ScanHistoryRoute
   '/surplus-forecast': typeof SurplusForecastRoute
   '/sustainability': typeof SustainabilityRoute
 }
@@ -93,9 +141,15 @@ export interface FileRoutesById {
   '/alert-history': typeof AlertHistoryRoute
   '/alert-settings': typeof AlertSettingsRoute
   '/dashboard': typeof DashboardRoute
+  '/impact-wall': typeof ImpactWallRoute
+  '/iot-sensors': typeof IotSensorsRoute
+  '/menu-optimizer': typeof MenuOptimizerRoute
+  '/ngo-registry': typeof NgoRegistryRoute
+  '/pickup-calendar': typeof PickupCalendarRoute
   '/quality-alerts': typeof QualityAlertsRoute
   '/quality-scanner': typeof QualityScannerRoute
   '/redistribution': typeof RedistributionRoute
+  '/scan-history': typeof ScanHistoryRoute
   '/surplus-forecast': typeof SurplusForecastRoute
   '/sustainability': typeof SustainabilityRoute
 }
@@ -106,9 +160,15 @@ export interface FileRouteTypes {
     | '/alert-history'
     | '/alert-settings'
     | '/dashboard'
+    | '/impact-wall'
+    | '/iot-sensors'
+    | '/menu-optimizer'
+    | '/ngo-registry'
+    | '/pickup-calendar'
     | '/quality-alerts'
     | '/quality-scanner'
     | '/redistribution'
+    | '/scan-history'
     | '/surplus-forecast'
     | '/sustainability'
   fileRoutesByTo: FileRoutesByTo
@@ -117,9 +177,15 @@ export interface FileRouteTypes {
     | '/alert-history'
     | '/alert-settings'
     | '/dashboard'
+    | '/impact-wall'
+    | '/iot-sensors'
+    | '/menu-optimizer'
+    | '/ngo-registry'
+    | '/pickup-calendar'
     | '/quality-alerts'
     | '/quality-scanner'
     | '/redistribution'
+    | '/scan-history'
     | '/surplus-forecast'
     | '/sustainability'
   id:
@@ -128,9 +194,15 @@ export interface FileRouteTypes {
     | '/alert-history'
     | '/alert-settings'
     | '/dashboard'
+    | '/impact-wall'
+    | '/iot-sensors'
+    | '/menu-optimizer'
+    | '/ngo-registry'
+    | '/pickup-calendar'
     | '/quality-alerts'
     | '/quality-scanner'
     | '/redistribution'
+    | '/scan-history'
     | '/surplus-forecast'
     | '/sustainability'
   fileRoutesById: FileRoutesById
@@ -140,9 +212,15 @@ export interface RootRouteChildren {
   AlertHistoryRoute: typeof AlertHistoryRoute
   AlertSettingsRoute: typeof AlertSettingsRoute
   DashboardRoute: typeof DashboardRoute
+  ImpactWallRoute: typeof ImpactWallRoute
+  IotSensorsRoute: typeof IotSensorsRoute
+  MenuOptimizerRoute: typeof MenuOptimizerRoute
+  NgoRegistryRoute: typeof NgoRegistryRoute
+  PickupCalendarRoute: typeof PickupCalendarRoute
   QualityAlertsRoute: typeof QualityAlertsRoute
   QualityScannerRoute: typeof QualityScannerRoute
   RedistributionRoute: typeof RedistributionRoute
+  ScanHistoryRoute: typeof ScanHistoryRoute
   SurplusForecastRoute: typeof SurplusForecastRoute
   SustainabilityRoute: typeof SustainabilityRoute
 }
@@ -177,6 +255,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/impact-wall': {
+      id: '/impact-wall'
+      path: '/impact-wall'
+      fullPath: '/impact-wall'
+      preLoaderRoute: typeof ImpactWallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/iot-sensors': {
+      id: '/iot-sensors'
+      path: '/iot-sensors'
+      fullPath: '/iot-sensors'
+      preLoaderRoute: typeof IotSensorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/menu-optimizer': {
+      id: '/menu-optimizer'
+      path: '/menu-optimizer'
+      fullPath: '/menu-optimizer'
+      preLoaderRoute: typeof MenuOptimizerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ngo-registry': {
+      id: '/ngo-registry'
+      path: '/ngo-registry'
+      fullPath: '/ngo-registry'
+      preLoaderRoute: typeof NgoRegistryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pickup-calendar': {
+      id: '/pickup-calendar'
+      path: '/pickup-calendar'
+      fullPath: '/pickup-calendar'
+      preLoaderRoute: typeof PickupCalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/quality-alerts': {
       id: '/quality-alerts'
       path: '/quality-alerts'
@@ -196,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/redistribution'
       fullPath: '/redistribution'
       preLoaderRoute: typeof RedistributionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scan-history': {
+      id: '/scan-history'
+      path: '/scan-history'
+      fullPath: '/scan-history'
+      preLoaderRoute: typeof ScanHistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/surplus-forecast': {
@@ -220,9 +340,15 @@ const rootRouteChildren: RootRouteChildren = {
   AlertHistoryRoute: AlertHistoryRoute,
   AlertSettingsRoute: AlertSettingsRoute,
   DashboardRoute: DashboardRoute,
+  ImpactWallRoute: ImpactWallRoute,
+  IotSensorsRoute: IotSensorsRoute,
+  MenuOptimizerRoute: MenuOptimizerRoute,
+  NgoRegistryRoute: NgoRegistryRoute,
+  PickupCalendarRoute: PickupCalendarRoute,
   QualityAlertsRoute: QualityAlertsRoute,
   QualityScannerRoute: QualityScannerRoute,
   RedistributionRoute: RedistributionRoute,
+  ScanHistoryRoute: ScanHistoryRoute,
   SurplusForecastRoute: SurplusForecastRoute,
   SustainabilityRoute: SustainabilityRoute,
 }
